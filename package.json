@@ -1,0 +1,29 @@
+{
+  "name": "dsh-kicad-preset",
+  "version": "1.4.0",
+  "description": "KiCad 10 schematic/PCB agent preset for DeepSeek Harness, with Konnect MCP, hardening gates, and read-only schematic tools.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "kicad",
+    "konnect",
+    "mcp",
+    "agent-preset",
+    "schematic",
+    "pcb",
+    "clearance"
+  ],
+  "files": [
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "skills/"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

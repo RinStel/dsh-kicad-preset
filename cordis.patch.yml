@@ -1,0 +1,112 @@
+# KiCad 10 原理图 / PCB 设计预设。
+# 安装后以 `kicad` 预设出现在 Agent 预设列表中。
+# 所有 KiCad 源文件的修改都经由 Konnect MCP，而不是文本编辑工具。
+- insert:
+    - id: preset-kicad
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: kicad
+        name: KiCad 硬件设计
+        description: 原理图与 PCB 布局：Konnect MCP + KiCad 技能；工程文件只经 MCP 修改。
+        order: 5
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                你是由 {{model}} 驱动的资深硬件工程师，负责本会话的 KiCad 10 原理图与 PCB 设计。用中文回答；工具名、网络名、封装名、库 ID、命令和字段名保持英文原样。
+
+                # 工作方式
+                - 任何 KiCad 任务先调用 `skill("konnect")`；原理图编辑/批量重排还要加载 `kicad-schematic-hardening`，按其门禁执行；再按任务加载 `kicad-schematic`、`kicad-pcb`、`kicad-library`、`kicad-review`、`kicad-manufacture` 中相关的技能。
+                - KiCad 源文件（`.kicad_sch`、`.kicad_pcb`、`.kicad_pro`、库文件与 `*-lib-table`）只经 `mcp__konnect__*` 修改；MCP 工具不可用时停止并报告，绝不回退到文本编辑。
+                - 同一时刻只允许一个 agent 修改同一个原理图/PCB。小改动直接做；完整的多模块构建或独立审查可用 `subagent` / `subagent_fork` 委派，子代理继承当前 `kicad` 预设，并在返回后验收其证据。
+                - 破坏性操作（删除元件/网络、改板框、批量重标注、覆盖工程文件）先说明影响并取得确认；产品级取舍（电源架构、连接器、叠层、成本/交期）用 `ask_user_question` 让用户决定。
+                - 报告、BOM、清单写到 `docs/` 或 `exports/`；`exports/` 只放交付件，一次性脚本/中间产物进 `tools/` 或 `tmp/`。
+
+                # 原理图硬门禁
+                - MCP 改原理图时 KiCad GUI 必须关闭；出现多个 `.kicad_sch` 同秒 mtime、wires 计数下降或新 `.lck`，立即停工并报告。
+                - 连通性终判只认 `kicad-cli` 导出的网表；ERC error=0 不等于电气正确；完成 = 网表 + 结构 + 间隙三角。
+                - 电源符号只落导线/引脚端点；跨页信号只用 `global_label` 或 hierarchical label + sheet pin；EasyEDA 导入后归一化引脚电气类型并核对封装后缀。
+                - 批量改动前后做网表 diff：纯外观改动要求逐字节一致，去标签/实线化要求每个网络的成员集合不变。
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000
+          - id: present
+            name: '@deepseek-ai/dsh-tool-present'
+          - id: tool-subagent-control
+            name: '@deepseek-ai/dsh-tool-subagent-control'
+          - id: tool-subagent-list-agents
+            name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+          - id: tool-subagent
+            name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: spawn
+              toolName: subagent
+              maxDepth: 1
+          - id: tool-subagent-fork
+            name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: fork
+              toolName: subagent_fork
+              maxDepth: 1
+          - id: mcp-konnect
+            name: '@deepseek-ai/dsh-mcp-client'
+            config:
+              serverName: konnect
+              transport: stdio
+              command: 'konnect'
+              toolCallTimeoutMs: 180000
+              maxInstructionBytes: 65536
+              failOnStartupError: false
+              # 如果 PCB IPC 找不到 KiCad，取消注释并填入你的 KiCad socket：
+              # env:
+              #   KICAD_API_SOCKET: 'ipc:///tmp/kicad/api.sock'
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
